@@ -412,9 +412,9 @@ public class AsyncContextImpl implements AsyncContext, AsyncContextCallback {
         }
 
 
-        AtomicBoolean result = new AtomicBoolean();
-        request.getCoyoteRequest().action(ActionCode.ASYNC_IS_ERROR, result);
-        if (result.get()) {
+        AtomicBoolean isError = new AtomicBoolean();
+        request.getCoyoteRequest().action(ActionCode.ASYNC_IS_ERROR, isError);
+        if (isError.get()) {
             // No listener called dispatch() or complete(). This is an error.
             // SRV.2.3.3.3 (search for "error dispatch")
             // Take a local copy to avoid threading issues if another thread
@@ -431,18 +431,23 @@ public class AsyncContextImpl implements AsyncContext, AsyncContextCallback {
                 ((StandardHostValve) stdHostValve).throwable(request, request.getResponse(), t);
             }
 
-            request.getCoyoteRequest().action(ActionCode.ASYNC_IS_ERROR, result);
-            if (result.get()) {
+            request.getCoyoteRequest().action(ActionCode.ASYNC_IS_ERROR, isError);
+            if (isError.get()) {
                 // Still in the error state. The error page did not call
                 // complete() or dispatch(). Complete the async processing.
                 complete();
             }
         } else if (request.isAsyncDispatching()) {
             /*
-             * AsyncListener.onError() called dispatch. Clear the error state on the response else the dispatch will
+             * AsyncListener.onError() called dispatch.
+             * Clear the error state on the response if IO is still allowed else the dispatch will
              * trigger error page handling.
              */
-            request.getResponse().resetError();
+            AtomicBoolean isIOAllowed = new AtomicBoolean();
+            request.getCoyoteRequest().action(ActionCode.IS_IO_ALLOWED, isIOAllowed);
+            if (isIOAllowed.get()) {
+                request.getResponse().resetError();
+            }
         }
     }
 
