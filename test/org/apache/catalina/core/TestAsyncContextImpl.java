@@ -2555,7 +2555,7 @@ public class TestAsyncContextImpl extends TomcatBaseTest {
         final Request request = new Request(null);
         request.setCoyoteRequest(new org.apache.coyote.Request());
         request.getMappingData().context = context;
-        final AsyncContextImpl ac = new AsyncContextImpl(request);
+        final AsyncContextImpl ac = new AsyncContextImpl(request, response);
         ac.addListener(listener, servletRequest, servletResponse);
         ac.setStarted(context, request, response, true);
         ac.addListener(listener, servletRequest, servletResponse);

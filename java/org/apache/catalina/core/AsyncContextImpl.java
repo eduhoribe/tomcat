@@ -40,6 +40,7 @@ import org.apache.catalina.Globals;
 import org.apache.catalina.Host;
 import org.apache.catalina.Valve;
 import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.coyote.ActionCode;
 import org.apache.coyote.AsyncContextCallback;
 import org.apache.coyote.RequestInfo;
@@ -73,14 +74,16 @@ public class AsyncContextImpl implements AsyncContext, AsyncContextCallback {
     private long timeout = -1;
     private AsyncEvent event = null;
     private volatile Request request;
+    private volatile Response response;
     private final AtomicBoolean hasErrorProcessingStarted = new AtomicBoolean(false);
     private final AtomicBoolean hasOnErrorReturned = new AtomicBoolean(false);
 
-    public AsyncContextImpl(Request request) {
+    public AsyncContextImpl(Request request, Response response) {
         if (log.isTraceEnabled()) {
             logDebug("Constructor");
         }
         this.request = request;
+        this.response = response;
     }
 
     @Override
@@ -279,6 +282,7 @@ public class AsyncContextImpl implements AsyncContext, AsyncContextCallback {
         hasOriginalRequestAndResponse = true;
         listeners.clear();
         request = null;
+        response = null;
         clearServletRequestResponse();
         timeout = -1;
         hasErrorProcessingStarted.set(false);
@@ -412,9 +416,9 @@ public class AsyncContextImpl implements AsyncContext, AsyncContextCallback {
         }
 
 
-        AtomicBoolean result = new AtomicBoolean();
-        request.getCoyoteRequest().action(ActionCode.ASYNC_IS_ERROR, result);
-        if (result.get()) {
+        AtomicBoolean isError = new AtomicBoolean();
+        request.getCoyoteRequest().action(ActionCode.ASYNC_IS_ERROR, isError);
+        if (isError.get()) {
             // No listener called dispatch() or complete(). This is an error.
             // SRV.2.3.3.3 (search for "error dispatch")
             // Take a local copy to avoid threading issues if another thread
@@ -431,18 +435,21 @@ public class AsyncContextImpl implements AsyncContext, AsyncContextCallback {
                 ((StandardHostValve) stdHostValve).throwable(request, request.getResponse(), t);
             }
 
-            request.getCoyoteRequest().action(ActionCode.ASYNC_IS_ERROR, result);
-            if (result.get()) {
+            request.getCoyoteRequest().action(ActionCode.ASYNC_IS_ERROR, isError);
+            if (isError.get()) {
                 // Still in the error state. The error page did not call
                 // complete() or dispatch(). Complete the async processing.
                 complete();
             }
         } else if (request.isAsyncDispatching()) {
             /*
-             * AsyncListener.onError() called dispatch. Clear the error state on the response else the dispatch will
+             * AsyncListener.onError() called dispatch.
+             * Clear the error state on the response if it wasn't committed yet else the dispatch will
              * trigger error page handling.
              */
-            request.getResponse().resetError();
+            if (!response.isCommitted()) {
+                request.getResponse().resetError();
+            }
         }
     }
 

@@ -1563,7 +1563,7 @@ public class Request implements HttpServletRequest {
         }
 
         if (asyncContext == null) {
-            asyncContext = new AsyncContextImpl(this);
+            asyncContext = new AsyncContextImpl(this, this.response);
         }
 
         asyncContext.setStarted(getContext(), request, response,
